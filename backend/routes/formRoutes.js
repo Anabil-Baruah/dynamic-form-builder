@@ -12,7 +12,6 @@ const {
   deleteField,
   reorderFields
 } = require('../controllers/formController');
-const { authenticateAdmin } = require('../middleware/auth');
 const {
   createFormRules,
   updateFormRules,
@@ -25,16 +24,16 @@ const {
 router.get('/public', getPublicForms); // List active forms publicly
 router.get('/:id', getFormById); // Get form for rendering
 
-// Admin routes (authentication required)
-router.get('/', authenticateAdmin, listFormsRules, validate, getAllForms);
-router.post('/', authenticateAdmin, createFormRules, validate, createForm);
-router.put('/:id', authenticateAdmin, updateFormRules, validate, updateForm);
-router.delete('/:id', authenticateAdmin, deleteForm);
+// Management routes (now public)
+router.get('/', listFormsRules, validate, getAllForms);
+router.post('/', createFormRules, validate, createForm);
+router.put('/:id', updateFormRules, validate, updateForm);
+router.delete('/:id', deleteForm);
 
-// Field management routes
-router.post('/:id/fields', authenticateAdmin, createFieldRules, validate, addField);
-router.put('/:id/fields/:fieldId', authenticateAdmin, updateField);
-router.delete('/:id/fields/:fieldId', authenticateAdmin, deleteField);
-router.put('/:id/reorder', authenticateAdmin, reorderFields);
+// Field management routes (public)
+router.post('/:id/fields', createFieldRules, validate, addField);
+router.put('/:id/fields/:fieldId', updateField);
+router.delete('/:id/fields/:fieldId', deleteField);
+router.put('/:id/reorder', reorderFields);
 
 module.exports = router;

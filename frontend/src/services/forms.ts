@@ -46,7 +46,6 @@ export const fetchForms = async (
   const query = searchParams.toString();
   const response = await apiFetch<FormsApiListResponse>(
     `/api/forms${query ? `?${query}` : ""}`,
-    { admin: true },
   );
 
   return {
@@ -82,7 +81,6 @@ export const createForm = async (payload: FormPayload): Promise<Form> => {
   const response = await apiFetch<CreateFormApiResponse>("/api/forms", {
     method: "POST",
     body: payload,
-    admin: true,
   });
   return response.data;
 };
@@ -94,7 +92,6 @@ export const updateForm = async (
   const response = await apiFetch<UpdateFormApiResponse>(`/api/forms/${formId}`, {
     method: "PUT",
     body: payload,
-    admin: true,
   });
   return response.data;
 };
@@ -106,7 +103,6 @@ export const updateFormStatus = async (
   const response = await apiFetch<UpdateFormApiResponse>(`/api/forms/${formId}`, {
     method: "PUT",
     body: { status },
-    admin: true,
   });
   return response.data;
 };
@@ -114,7 +110,6 @@ export const updateFormStatus = async (
 export const deleteForm = async (formId: string): Promise<void> => {
   await apiFetch(`/api/forms/${formId}`, {
     method: "DELETE",
-    admin: true,
   });
 };
 
@@ -122,7 +117,6 @@ export const addFormField = async (formId: string, field: FormField) => {
   const response = await apiFetch<FormApiResponse>(`/api/forms/${formId}/fields`, {
     method: "POST",
     body: field,
-    admin: true,
   });
   return response.data;
 };
@@ -134,7 +128,6 @@ export const reorderFormFields = async (
   const response = await apiFetch<FormApiResponse>(`/api/forms/${formId}/reorder`, {
     method: "PUT",
     body: { fieldOrders },
-    admin: true,
   });
   return response.data;
 };

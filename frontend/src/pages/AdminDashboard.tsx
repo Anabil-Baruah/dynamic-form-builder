@@ -5,19 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Plus, FileText, BarChart3, Settings, LogOut } from "lucide-react";
 import { FormList } from "@/components/admin/FormList";
 import { FormBuilder } from "@/components/admin/FormBuilder";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const AdminDashboard = () => {
   const [activeView, setActiveView] = useState<"list" | "builder">("list");
   const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
-  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
-    toast.success("Logged out successfully");
-    navigate("/login");
+    navigate("/");
+    toast.success("Goodbye");
   };
 
   const handleCreateNew = () => {
@@ -61,7 +58,7 @@ const AdminDashboard = () => {
             </Button>
             <Button variant="outline" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" />
-              Logout
+              Close
             </Button>
           </div>
         </div>

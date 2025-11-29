@@ -29,7 +29,7 @@ const Index = () => {
               size="lg"
               className="bg-gradient-primary text-lg px-8 py-6 h-auto"
             >
-              Go to Admin Dashboard
+              Open Form Builder
             </Button>
             <Button 
               onClick={() => navigate("/forms")}

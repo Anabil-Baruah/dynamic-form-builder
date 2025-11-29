@@ -16,7 +16,6 @@ interface RequestOptions {
   method?: RequestMethod;
   body?: unknown;
   headers?: Record<string, string>;
-  admin?: boolean;
   signal?: AbortSignal;
   credentials?: RequestCredentials;
 }
@@ -31,34 +30,12 @@ const resolveBaseUrl = () => {
 
 export const API_BASE_URL = resolveBaseUrl();
 
-// Get token from localStorage (used when AuthContext is not available)
-const getStoredToken = (): string | null => {
-  return localStorage.getItem("admin_token");
-};
-
-const createAuthorizationHeader = (): string | undefined => {
-  // First try to get from localStorage (for API calls outside React components)
-  const storedToken = getStoredToken();
-  if (storedToken) {
-    return `Bearer ${storedToken}`;
-  }
-  
-  // Fallback to env variable for backward compatibility
-  const envToken = import.meta.env.VITE_ADMIN_TOKEN;
-  if (envToken) {
-    return `Bearer ${envToken}`;
-  }
-  
-  return undefined;
-};
-
 export async function apiFetch<T>(
   path: string,
   {
     method = "GET",
     body,
     headers = {},
-    admin = false,
     signal,
     credentials,
   }: RequestOptions = {},
@@ -73,18 +50,7 @@ export async function apiFetch<T>(
     requestHeaders["Content-Type"] = "application/json";
   }
 
-  if (admin) {
-    const authHeader = createAuthorizationHeader();
-    if (authHeader) {
-      requestHeaders.Authorization = authHeader;
-    } else {
-      throw new ApiError(
-        "Authentication required. Please log in.",
-        401,
-        { message: "No authorization token found" }
-      );
-    }
-  }
+  // No authentication: all endpoints are public
 
   const response = await fetch(url, {
     method,

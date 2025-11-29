@@ -1,12 +1,12 @@
 const request = require('supertest');
 const mongoose = require('mongoose');
-const app = require('../server');
+const { app } = require('../server');
 const Form = require('../models/Form');
 const Submission = require('../models/Submission');
 
 describe('Submission API Tests', () => {
-  let testForm;
-  const adminToken = process.env.ADMIN_TOKEN || 'test-admin-token';
+  let testFormId;
+  // Admin authentication removed; tests now run without tokens
 
   beforeAll(async () => {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/formbuilder-test');
@@ -17,8 +17,7 @@ describe('Submission API Tests', () => {
   });
 
   beforeEach(async () => {
-    // Create test form
-    testForm = await Form.create({
+    const formPayload = {
       title: 'Contact Form',
       status: 'active',
       fields: [
@@ -52,7 +51,13 @@ describe('Submission API Tests', () => {
           }
         }
       ]
-    });
+    };
+
+    const res = await request(app)
+      .post('/api/forms')
+      .send(formPayload)
+      .expect(201);
+    testFormId = res.body.data._id;
   });
 
   afterEach(async () => {
@@ -71,7 +76,7 @@ describe('Submission API Tests', () => {
       };
 
       const response = await request(app)
-        .post(`/api/submissions/${testForm._id}/submit`)
+        .post(`/api/submissions/${testFormId}/submit`)
         .send(submissionData)
         .expect(201);
 
@@ -87,7 +92,7 @@ describe('Submission API Tests', () => {
       };
 
       const response = await request(app)
-        .post(`/api/submissions/${testForm._id}/submit`)
+        .post(`/api/submissions/${testFormId}/submit`)
         .send(submissionData)
         .expect(400);
 
@@ -104,7 +109,7 @@ describe('Submission API Tests', () => {
       };
 
       const response = await request(app)
-        .post(`/api/submissions/${testForm._id}/submit`)
+        .post(`/api/submissions/${testFormId}/submit`)
         .send(submissionData)
         .expect(400);
 
@@ -121,7 +126,7 @@ describe('Submission API Tests', () => {
       };
 
       const response = await request(app)
-        .post(`/api/submissions/${testForm._id}/submit`)
+        .post(`/api/submissions/${testFormId}/submit`)
         .send(submissionData)
         .expect(400);
 
@@ -137,7 +142,7 @@ describe('Submission API Tests', () => {
       };
 
       const response = await request(app)
-        .post(`/api/submissions/${testForm._id}/submit`)
+        .post(`/api/submissions/${testFormId}/submit`)
         .send(submissionData)
         .expect(400);
 
@@ -150,30 +155,30 @@ describe('Submission API Tests', () => {
       // Create test submissions
       await Submission.create([
         {
-          formId: testForm._id,
+          formId: testFormId,
           formVersion: 1,
           answers: { full_name: 'User 1', email: 'user1@test.com' }
         },
         {
-          formId: testForm._id,
+          formId: testFormId,
           formVersion: 1,
           answers: { full_name: 'User 2', email: 'user2@test.com' }
         }
       ]);
 
       const response = await request(app)
-        .get(`/api/submissions/${testForm._id}`)
-        .set('Authorization', `Bearer ${adminToken}`)
+        .get(`/api/submissions/${testFormId}`)
         .expect(200);
 
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveLength(2);
     });
 
-    it('should require authentication', async () => {
-      await request(app)
-        .get(`/api/submissions/${testForm._id}`)
-        .expect(401);
+    it('should list submissions without authentication', async () => {
+      const response = await request(app)
+        .get(`/api/submissions/${testFormId}`)
+        .expect(200);
+      expect(response.body.success).toBe(true);
     });
   });
 });

@@ -92,13 +92,8 @@ exports.getFormById = async (req, res, next) => {
       });
     }
 
-    // Only return active forms for public access
-    if (form.status !== 'active' && !req.user) {
-      return res.status(403).json({
-        success: false,
-        message: 'Form is not available'
-      });
-    }
+  // Only return active forms for public access
+  // Admin authentication removed: return form regardless of status
 
     // Sort fields by order before returning
     if (form.fields && form.fields.length > 0) {
@@ -145,54 +140,26 @@ exports.updateForm = async (req, res, next) => {
       });
     }
 
-    // Only create version if fields or structure are being changed
-    // Skip versioning for status-only updates
-    const isStatusOnlyUpdate = Object.keys(req.body).length === 1 && req.body.status;
-    if (!isStatusOnlyUpdate) {
-      try {
-        await form.createVersion();
-      } catch (versionError) {
-        // If versioning fails, log but don't block the update
-        console.warn('Failed to create form version:', versionError.message);
-      }
-    }
+    // Versioning disabled: proceed with update directly
 
-    // Update form
+  // Update form
     const sanitizedData = sanitizeObject(req.body);
-    form = await Form.findByIdAndUpdate(
-      req.params.id,
-      sanitizedData,
-      { new: true, runValidators: true }
-    );
+    Object.assign(form, sanitizedData);
+    await form.save();
 
-    // Sort fields by order after update
-    if (form.fields && form.fields.length > 0) {
-      form.fields.sort((a, b) => (a.order || 0) - (b.order || 0));
-    }
+  // Sort fields by order after update
+  if (form.fields && form.fields.length > 0) {
+    form.fields.sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
 
     // Emit socket event for real-time updates
     const io = req.app.get('io');
     if (io) {
-      // Check if this is a status-only update
-      const isStatusOnlyUpdate = Object.keys(req.body).length === 1 && req.body.status;
-      
-      if (isStatusOnlyUpdate) {
-        // Status update
-        io.to(`form-${form._id}`).emit('form-status-updated', {
-          formId: form._id.toString(),
-          status: form.status,
-          title: form.title
-        });
-      } else {
-        // Full form update (including field order changes)
-        io.to(`form-${form._id}`).emit('form-updated', {
-          formId: form._id.toString(),
-          status: form.status,
-          title: form.title
-        });
-      }
-      
-      // Also emit to all clients for form list updates
+      io.to(`form-${form._id}`).emit('form-updated', {
+        formId: form._id.toString(),
+        status: form.status,
+        title: form.title
+      });
       io.emit('form-updated', {
         formId: form._id.toString(),
         status: form.status,

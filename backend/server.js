@@ -156,15 +156,17 @@ const connectDB = async () => {
   }
 };
 
-// Start server
+// Start server (skip in test environment)
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
-  server.listen(PORT, () => {
-    console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-    console.log(`Socket.io server ready`);
+if (process.env.NODE_ENV !== 'test') {
+  connectDB().then(() => {
+    server.listen(PORT, () => {
+      console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+      console.log(`Socket.io server ready`);
+    });
   });
-});
+}
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {

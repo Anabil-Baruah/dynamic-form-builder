@@ -12,7 +12,6 @@ const {
   exportSubmissions,
   getSubmissionStats
 } = require('../controllers/submissionController');
-const { authenticateAdmin } = require('../middleware/auth');
 const {
   submitFormRules,
   listSubmissionsRules,
@@ -60,12 +59,12 @@ const parseSubmission = (req, res, next) => {
 // Public routes
 router.post('/:id/submit', upload.any(), parseSubmission, submitFormRules, validate, submitForm);
 
-// Admin routes
-router.get('/:formId', authenticateAdmin, listSubmissionsRules, validate, getSubmissions);
-router.get('/:formId/stats', authenticateAdmin, getSubmissionStats);
-router.get('/:formId/export', authenticateAdmin, exportSubmissions);
-router.get('/:formId/:submissionId', authenticateAdmin, getSubmissionById);
-router.patch('/:formId/:submissionId', authenticateAdmin, updateSubmissionStatus);
-router.delete('/:formId/:submissionId', authenticateAdmin, deleteSubmission);
+// Management routes (public)
+router.get('/:formId', listSubmissionsRules, validate, getSubmissions);
+router.get('/:formId/stats', getSubmissionStats);
+router.get('/:formId/export', exportSubmissions);
+router.get('/:formId/:submissionId', getSubmissionById);
+router.patch('/:formId/:submissionId', updateSubmissionStatus);
+router.delete('/:formId/:submissionId', deleteSubmission);
 
 module.exports = router;
