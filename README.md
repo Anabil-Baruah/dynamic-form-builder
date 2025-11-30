@@ -68,14 +68,11 @@ npm install
 Frontend `.env` (optional):
 ```
 VITE_API_URL=http://localhost:5000
-VITE_ADMIN_TOKEN=your-admin-token   # optional; used for local testing
 ```
 
 Backend `.env`:
 ```
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/formbuilder
-ADMIN_TOKEN=your-secret-admin-token
 CORS_ORIGIN=http://localhost:5173
 NODE_ENV=development
 ```
