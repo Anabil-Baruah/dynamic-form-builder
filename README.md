@@ -97,10 +97,16 @@ Backend default: http://localhost:5000
 - Files are stored on disk under `backend/uploads/forms/<formId>`.
 - Stored file metadata (url, path, originalName, size, mimeType) is attached into the submission answers.
 
+## Data Storage Layout
+
+- Forms JSON: `backend/uploads/forms/<formId>/form.json`
+- Submissions JSON: `backend/uploads/forms/<formId>/submissions/<submissionId>.json`
+- File uploads: `backend/uploads/forms/<formId>/*` (managed by Multer)
+
 ## CSV Export
 
-- Admin can export submissions with a button in the dashboard.
-- Route: `GET /api/submissions/:formId/export` (requires Authorization header).
+- Export submissions with a button in the dashboard.
+- Route: `GET /api/submissions/:formId/export`.
 
 ## Scripts
 
