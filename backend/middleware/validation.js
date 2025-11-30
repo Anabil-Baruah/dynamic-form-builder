@@ -29,7 +29,7 @@ exports.createFormRules = [
 ];
 
 exports.updateFormRules = [
-  param('id').isMongoId().withMessage('Invalid form ID'),
+  param('id').trim().notEmpty().withMessage('Invalid form ID'),
   body('title')
     .optional()
     .trim()
@@ -50,7 +50,7 @@ exports.updateFormRules = [
 
 // Field validation rules
 exports.createFieldRules = [
-  param('id').isMongoId().withMessage('Invalid form ID'),
+  param('id').trim().notEmpty().withMessage('Invalid form ID'),
   body('label')
     .trim()
     .notEmpty().withMessage('Field label is required')
@@ -73,7 +73,7 @@ exports.createFieldRules = [
 
 // Submission validation
 exports.submitFormRules = [
-  param('id').isMongoId().withMessage('Invalid form ID'),
+  param('id').trim().notEmpty().withMessage('Invalid form ID'),
   body('answers')
     .notEmpty().withMessage('Answers are required')
     .isObject().withMessage('Answers must be an object'),
@@ -94,7 +94,7 @@ exports.listFormsRules = [
 ];
 
 exports.listSubmissionsRules = [
-  param('formId').isMongoId().withMessage('Invalid form ID'),
+  param('formId').trim().notEmpty().withMessage('Invalid form ID'),
   query('status')
     .optional()
     .isIn(['pending', 'reviewed', 'archived'])

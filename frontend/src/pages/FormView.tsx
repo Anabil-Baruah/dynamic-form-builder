@@ -25,7 +25,7 @@ import type { Form, FormField } from "@/types/form";
 const FormView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [submitted, setSubmitted] = useState(false);
 
   const { data: form, isLoading, isError, error, refetch } = useQuery({
@@ -74,7 +74,7 @@ const FormView = () => {
       setSubmitted(true);
       toast.success(response.message || "Form submitted successfully!");
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       // Handle validation errors from backend
       if (error?.data?.errors && Array.isArray(error.data.errors)) {
         const firstError = error.data.errors[0];
@@ -94,7 +94,7 @@ const FormView = () => {
     },
   });
 
-  const handleInputChange = (fieldName: string, value: any) => {
+  const handleInputChange = (fieldName: string, value: unknown) => {
     setFormData((prev) => ({
       ...prev,
       [fieldName]: value,
@@ -146,7 +146,7 @@ const FormView = () => {
       return;
     }
 
-    const answersPayload: Record<string, any> = {};
+    const answersPayload: Record<string, unknown> = {};
     const submissionPayload = new FormData();
 
     form.fields.forEach((field) => {
@@ -182,7 +182,7 @@ const FormView = () => {
             onChange={(e) => handleInputChange(field.name, e.target.value)}
             required={isRequired}
             placeholder={field.label}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
           />
         );
 
@@ -195,7 +195,7 @@ const FormView = () => {
             required={isRequired}
             placeholder={field.label}
             rows={4}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
           />
         );
 
@@ -210,7 +210,7 @@ const FormView = () => {
             }
             required={isRequired}
             placeholder={field.label}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
             min={field.validation?.min}
             max={field.validation?.max}
           />
@@ -224,7 +224,8 @@ const FormView = () => {
             value={value}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
             required={isRequired}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
+            min={field.validation?.minDate}
           />
         );
 
@@ -233,7 +234,7 @@ const FormView = () => {
           <Select
             value={value}
             onValueChange={(val) => handleInputChange(field.name, val)}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
           >
             <SelectTrigger>
               <SelectValue placeholder={`Select ${field.label}`} />
@@ -253,7 +254,7 @@ const FormView = () => {
           <RadioGroup
             value={value}
             onValueChange={(val) => handleInputChange(field.name, val)}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
           >
             {field.options?.map((option, idx) => (
               <div key={idx} className="flex items-center space-x-2">
@@ -266,7 +267,7 @@ const FormView = () => {
           </RadioGroup>
         );
 
-      case "checkbox":
+      case "checkbox": {
         const checkboxValues = Array.isArray(value) ? value : [];
         return (
           <div className="space-y-2">
@@ -278,7 +279,7 @@ const FormView = () => {
                   onCheckedChange={(checked) =>
                     handleCheckboxChange(field.name, option, checked as boolean)
                   }
-                  disabled={submitted}
+                  disabled={submitMutation.isPending}
                 />
                 <Label htmlFor={`${field.name}-${idx}`} className="font-normal">
                   {option}
@@ -287,6 +288,7 @@ const FormView = () => {
             ))}
           </div>
         );
+      }
 
       case "file":
         return (
@@ -299,7 +301,7 @@ const FormView = () => {
                 handleInputChange(field.name, file ?? null);
               }}
               required={isRequired}
-              disabled={submitted}
+              disabled={submitMutation.isPending}
             />
             {formData[field.name] instanceof File && (
               <p className="text-sm text-muted-foreground">
@@ -318,7 +320,7 @@ const FormView = () => {
             onChange={(e) => handleInputChange(field.name, e.target.value)}
             required={isRequired}
             placeholder={field.label}
-            disabled={submitted}
+            disabled={submitMutation.isPending}
           />
         );
     }
@@ -440,6 +442,13 @@ const FormView = () => {
             </div>
           </form>
         </Card>
+      </div>
+      <div className="container mx-auto mt-8">
+        <div className="flex items-center justify-end">
+          <Button variant="outline" onClick={() => navigate(`/form/${id}/submissions`)}>
+            View Submissions
+          </Button>
+        </div>
       </div>
     </div>
   );

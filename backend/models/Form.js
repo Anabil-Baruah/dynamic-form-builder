@@ -38,7 +38,8 @@ const fieldSchema = new mongoose.Schema({
     minLength: Number,
     maxLength: Number,
     pattern: String,
-    customMessage: String
+    customMessage: String,
+    minDate: Date
   },
   order: {
     type: Number,

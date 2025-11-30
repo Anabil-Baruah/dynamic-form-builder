@@ -5,11 +5,11 @@ A full-stack dynamic form builder with an admin dashboard, public form rendering
 ## Tech Stack
 
 - Frontend: Vite, React, TypeScript, Tailwind CSS, shadcn-ui, React Router, TanStack Query
-- Backend: Node.js, Express, MongoDB (Mongoose), Socket.IO, Multer, json2csv
+- Backend: Node.js, Express, JSON file store (filesystem), Socket.IO, Multer, json2csv
 
 ## Architecture
 
-The app is split into a React SPA frontend and an Express API backend with MongoDB. Files uploaded via forms are stored on the server’s filesystem and served statically.
+The app is split into a React SPA frontend and an Express API backend. Data (forms and submissions) is stored as JSON files under `backend/uploads/forms`. Files uploaded via forms are stored on the server’s filesystem and served statically.
 
 ```mermaid
 flowchart LR
@@ -24,14 +24,13 @@ flowchart LR
   APIClient -->|HTTP /api/*| API[(Express API)]
 
   subgraph Backend
-    API --> Auth[Admin Auth (Bearer Token)]
     API --> Forms[Forms Controller]
     API --> Subs[Submissions Controller]
     API --> Uploads[/uploads static/]
     Subs --> Multer[Multer File Storage]
     API <--> WS[(Socket.IO)]
-    Forms --> DB[(MongoDB)]
-    Subs --> DB
+    Forms --> JSON[(JSON File Store under /uploads/forms)]
+    Subs --> JSON
   end
 
   Uploads --> Static[Static File Server]
@@ -39,18 +38,19 @@ flowchart LR
 
 ## Features
 
-- Admin dashboard with protected routes
+- Admin dashboard
 - Create, edit, reorder, and manage forms (including file field type)
 - Public form rendering at `/form/:id`
+- Edit submissions from the submissions table with validation
+- Validation: numbers (min/max), text (min/max length, pattern), dates (minDate)
 - File uploads stored under `backend/uploads/forms/<formId>` and accessible via `/uploads/...`
-- CSV export of submissions per form (admin-only)
+- CSV export of submissions per form
 - Real-time updates with Socket.IO for form changes
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js 18+ and npm
-- MongoDB (local or Docker)
 
 ### 1) Install dependencies
 

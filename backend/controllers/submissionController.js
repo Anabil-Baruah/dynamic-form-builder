@@ -1,8 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const mongoose = require('mongoose');
-const Submission = require('../models/Submission');
-const Form = require('../models/Form');
+const store = require('../utils/fileStore');
 const FormValidator = require('../utils/formValidator');
 const { sanitizeObject } = require('../utils/sanitize');
 const { Parser } = require('json2csv');
@@ -25,7 +23,7 @@ const removeUploadedFiles = (files = []) => {
 // @access  Public
 exports.submitForm = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id);
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -95,9 +93,7 @@ exports.submitForm = async (req, res, next) => {
     }
 
     // Create submission
-    const submission = await Submission.create({
-      formId: form._id,
-      formVersion: form.version,
+    const submission = await store.createSubmission(form._id, {
       answers: sanitizedAnswers,
       metadata: {
         ipAddress: req.ip || req.connection.remoteAddress,
@@ -125,29 +121,8 @@ exports.submitForm = async (req, res, next) => {
 exports.getSubmissions = async (req, res, next) => {
   try {
     const { status, page = 1, limit = 20, sortBy = 'createdAt', order = 'desc' } = req.query;
-    
-    const query = { formId: req.params.formId };
-    if (status) query.status = status;
-
-    const sortOrder = order === 'desc' ? -1 : 1;
-
-    const submissions = await Submission.find(query)
-      .select('-__v')
-      .sort({ [sortBy]: sortOrder })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    const total = await Submission.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      data: submissions,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit)
-      }
-    });
+    const { data, pagination } = await store.listSubmissions(req.params.formId, { status, page: Number(page), limit: Number(limit), sortBy, order });
+    res.status(200).json({ success: true, data, pagination });
   } catch (error) {
     next(error);
   }
@@ -158,10 +133,13 @@ exports.getSubmissions = async (req, res, next) => {
 // @access  Admin
 exports.getSubmissionById = async (req, res, next) => {
   try {
-    const submission = await Submission.findOne({
-      _id: req.params.submissionId,
-      formId: req.params.formId
-    }).populate('formId', 'title fields');
+    const submission = await store.getSubmission(req.params.formId, req.params.submissionId);
+    if (submission) {
+      const form = await store.getForm(req.params.formId);
+      if (form) {
+        submission.formId = { title: form.title, fields: form.fields };
+      }
+    }
 
     if (!submission) {
       return res.status(404).json({
@@ -179,28 +157,51 @@ exports.getSubmissionById = async (req, res, next) => {
   }
 };
 
-// @desc    Update submission status
+// @desc    Update submission (status and/or answers)
 // @route   PATCH /api/submissions/:formId/:submissionId
 // @access  Admin
 exports.updateSubmissionStatus = async (req, res, next) => {
   try {
-    const { status } = req.body;
+    const update = {};
 
-    if (!['pending', 'reviewed', 'archived'].includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid status value'
-      });
+    if (req.body.status !== undefined) {
+      const { status } = req.body;
+      if (!['pending', 'reviewed', 'archived'].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid status value'
+        });
+      }
+      update.status = status;
     }
 
-    const submission = await Submission.findOneAndUpdate(
-      {
-        _id: req.params.submissionId,
-        formId: req.params.formId
-      },
-      { status },
-      { new: true }
-    );
+    if (req.body.answers && typeof req.body.answers === 'object') {
+      // Validate answers against form
+      const form = await store.getForm(req.params.formId);
+      if (!form) {
+        return res.status(404).json({ success: false, message: 'Form not found' });
+      }
+
+      const sanitizedAnswers = sanitizeObject(req.body.answers);
+      const validator = new FormValidator(form, sanitizedAnswers);
+      const validation = validator.validate();
+
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: validation.errors
+        });
+      }
+
+      update.answers = sanitizedAnswers;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid fields to update' });
+    }
+
+    const submission = await store.updateSubmission(req.params.formId, req.params.submissionId, update);
 
     if (!submission) {
       return res.status(404).json({
@@ -209,10 +210,7 @@ exports.updateSubmissionStatus = async (req, res, next) => {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: submission
-    });
+    res.status(200).json({ success: true, data: submission });
   } catch (error) {
     next(error);
   }
@@ -223,10 +221,12 @@ exports.updateSubmissionStatus = async (req, res, next) => {
 // @access  Admin
 exports.deleteSubmission = async (req, res, next) => {
   try {
-    const submission = await Submission.findOneAndDelete({
-      _id: req.params.submissionId,
-      formId: req.params.formId
-    });
+    const existing = await store.getSubmission(req.params.formId, req.params.submissionId);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Submission not found' });
+    }
+    await store.deleteSubmission(req.params.formId, req.params.submissionId);
+    const submission = existing;
 
     if (!submission) {
       return res.status(404).json({
@@ -249,7 +249,7 @@ exports.deleteSubmission = async (req, res, next) => {
 // @access  Admin
 exports.exportSubmissions = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.formId);
+    const form = await store.getForm(req.params.formId);
     if (!form) {
       return res.status(404).json({
         success: false,
@@ -257,8 +257,7 @@ exports.exportSubmissions = async (req, res, next) => {
       });
     }
 
-    const submissions = await Submission.find({ formId: req.params.formId })
-      .sort({ createdAt: -1 });
+    const { data: submissions } = await store.listSubmissions(req.params.formId, { page: 1, limit: 100000, sortBy: 'createdAt', order: 'desc' });
 
     if (submissions.length === 0) {
       return res.status(404).json({
@@ -315,30 +314,12 @@ exports.exportSubmissions = async (req, res, next) => {
 exports.getSubmissionStats = async (req, res, next) => {
   try {
     const formId = req.params.formId;
-
-    const stats = await Submission.aggregate([
-      { $match: { formId: mongoose.Types.ObjectId(formId) } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          pending: {
-            $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
-          },
-          reviewed: {
-            $sum: { $cond: [{ $eq: ['$status', 'reviewed'] }, 1, 0] }
-          },
-          archived: {
-            $sum: { $cond: [{ $eq: ['$status', 'archived'] }, 1, 0] }
-          }
-        }
-      }
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data: stats[0] || { total: 0, pending: 0, reviewed: 0, archived: 0 }
-    });
+    const { data } = await store.listSubmissions(formId, { page: 1, limit: 100000 });
+    const total = data.length;
+    const pending = data.filter(s => s.status === 'pending').length;
+    const reviewed = data.filter(s => s.status === 'reviewed').length;
+    const archived = data.filter(s => s.status === 'archived').length;
+    res.status(200).json({ success: true, data: { total, pending, reviewed, archived } });
   } catch (error) {
     next(error);
   }

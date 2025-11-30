@@ -16,6 +16,7 @@ export interface FieldValidation {
   maxLength?: number;
   pattern?: string;
   customMessage?: string;
+  minDate?: string;
 }
 
 export interface FormField {

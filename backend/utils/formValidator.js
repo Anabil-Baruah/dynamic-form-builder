@@ -114,6 +114,14 @@ class FormValidator {
     const date = new Date(value);
     if (isNaN(date.getTime())) {
       this.addError(field.name, `${field.label} must be a valid date`);
+      return;
+    }
+
+    if (field.validation && field.validation.minDate) {
+      const min = new Date(field.validation.minDate);
+      if (!isNaN(min.getTime()) && date < min) {
+        this.addError(field.name, `${field.label} must be on or after ${min.toISOString().slice(0, 10)}`);
+      }
     }
   }
 

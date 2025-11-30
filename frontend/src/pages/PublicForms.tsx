@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Copy, Loader2, RefreshCw, FileText } from "lucide-react";
+import { ExternalLink, Copy, Loader2, RefreshCw, FileText, Eye } from "lucide-react";
 import { fetchPublicForms } from "@/services/forms";
 import type { Form } from "@/types/form";
 import { toast } from "sonner";
@@ -33,6 +33,9 @@ const PublicForms = () => {
   const handleOpenForm = (formId: string) => {
     const url = getFormUrl(formId);
     window.open(url, "_blank");
+  };
+  const navigate = (path: string) => {
+    window.location.assign(path);
   };
 
   if (isLoading) {
@@ -96,6 +99,15 @@ const PublicForms = () => {
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
                     Open
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => navigate(`/form/${form._id}/submissions`)}
+                  >
+                    <Eye className="w-3 h-3 mr-1" />
+                    View Submissions
                   </Button>
                   <Button
                     variant="outline"

@@ -1,5 +1,5 @@
-const Form = require('../models/Form');
 const { sanitizeObject } = require('../utils/sanitize');
+const store = require('../utils/fileStore');
 
 // @desc    Get all forms
 // @route   GET /api/forms
@@ -11,30 +11,12 @@ exports.getAllForms = async (req, res, next) => {
     const query = {};
     if (status) query.status = status;
 
-    const forms = await Form.find(query)
-      .select('-__v')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    // Sort fields by order for each form
-    forms.forEach(form => {
-      if (form.fields && form.fields.length > 0) {
-        form.fields.sort((a, b) => (a.order || 0) - (b.order || 0));
-      }
+    const { data, pagination } = await store.listForms({ status, page: Number(page), limit: Number(limit) });
+    // Ensure fields sorted
+    data.forEach((form) => {
+      if (form.fields?.length) form.fields.sort((a, b) => (a.order || 0) - (b.order || 0));
     });
-
-    const total = await Form.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      data: forms,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit)
-      }
-    });
+    res.status(200).json({ success: true, data, pagination });
   } catch (error) {
     next(error);
   }
@@ -49,30 +31,11 @@ exports.getPublicForms = async (req, res, next) => {
 
     const query = { status: 'active' };
 
-    const forms = await Form.find(query)
-      .select('-__v')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-
-    // Sort fields by order for each form
-    forms.forEach(form => {
-      if (form.fields && form.fields.length > 0) {
-        form.fields.sort((a, b) => (a.order || 0) - (b.order || 0));
-      }
+    const { data, pagination } = await store.listForms({ status: 'active', page: Number(page), limit: Number(limit) });
+    data.forEach((form) => {
+      if (form.fields?.length) form.fields.sort((a, b) => (a.order || 0) - (b.order || 0));
     });
-
-    const total = await Form.countDocuments(query);
-
-    res.status(200).json({
-      success: true,
-      data: forms,
-      pagination: {
-        total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit)
-      }
-    });
+    res.status(200).json({ success: true, data, pagination });
   } catch (error) {
     next(error);
   }
@@ -83,7 +46,7 @@ exports.getPublicForms = async (req, res, next) => {
 // @access  Public (for rendering)
 exports.getFormById = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id).select('-__v');
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -115,7 +78,7 @@ exports.getFormById = async (req, res, next) => {
 exports.createForm = async (req, res, next) => {
   try {
     const sanitizedData = sanitizeObject(req.body);
-    const form = await Form.create(sanitizedData);
+    const form = await store.createForm(sanitizedData);
 
     res.status(201).json({
       success: true,
@@ -131,7 +94,7 @@ exports.createForm = async (req, res, next) => {
 // @access  Admin
 exports.updateForm = async (req, res, next) => {
   try {
-    let form = await Form.findById(req.params.id);
+    let form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -144,8 +107,7 @@ exports.updateForm = async (req, res, next) => {
 
   // Update form
     const sanitizedData = sanitizeObject(req.body);
-    Object.assign(form, sanitizedData);
-    await form.save();
+    form = await store.updateForm(req.params.id, sanitizedData);
 
   // Sort fields by order after update
   if (form.fields && form.fields.length > 0) {
@@ -181,7 +143,7 @@ exports.updateForm = async (req, res, next) => {
 // @access  Admin
 exports.deleteForm = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id);
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -190,7 +152,7 @@ exports.deleteForm = async (req, res, next) => {
       });
     }
 
-    await form.deleteOne();
+    await store.deleteForm(req.params.id);
 
     res.status(200).json({
       success: true,
@@ -206,7 +168,7 @@ exports.deleteForm = async (req, res, next) => {
 // @access  Admin
 exports.addField = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id);
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -216,8 +178,9 @@ exports.addField = async (req, res, next) => {
     }
 
     const sanitizedField = sanitizeObject(req.body);
-    form.fields.push(sanitizedField);
-    await form.save();
+    const nextFields = [...(form.fields || [])];
+    nextFields.push({ ...sanitizedField, _id: sanitizedField._id || `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`, order: nextFields.length });
+    const updated = await store.updateForm(req.params.id, { fields: nextFields });
 
     res.status(201).json({
       success: true,
@@ -233,7 +196,7 @@ exports.addField = async (req, res, next) => {
 // @access  Admin
 exports.updateField = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id);
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -242,7 +205,7 @@ exports.updateField = async (req, res, next) => {
       });
     }
 
-    const field = form.fields.id(req.params.fieldId);
+    const field = (form.fields || []).find(f => String(f._id) === String(req.params.fieldId));
     if (!field) {
       return res.status(404).json({
         success: false,
@@ -251,8 +214,8 @@ exports.updateField = async (req, res, next) => {
     }
 
     const sanitizedData = sanitizeObject(req.body);
-    Object.assign(field, sanitizedData);
-    await form.save();
+    const updatedFields = (form.fields || []).map(f => (String(f._id) === String(req.params.fieldId) ? { ...f, ...sanitizedData } : f));
+    const updated = await store.updateForm(req.params.id, { fields: updatedFields });
 
     res.status(200).json({
       success: true,
@@ -268,7 +231,7 @@ exports.updateField = async (req, res, next) => {
 // @access  Admin
 exports.deleteField = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id);
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -277,8 +240,8 @@ exports.deleteField = async (req, res, next) => {
       });
     }
 
-    form.fields.pull(req.params.fieldId);
-    await form.save();
+    const updatedFields = (form.fields || []).filter(f => String(f._id) !== String(req.params.fieldId));
+    const updated = await store.updateForm(req.params.id, { fields: updatedFields });
 
     res.status(200).json({
       success: true,
@@ -294,7 +257,7 @@ exports.deleteField = async (req, res, next) => {
 // @access  Admin
 exports.reorderFields = async (req, res, next) => {
   try {
-    const form = await Form.findById(req.params.id);
+    const form = await store.getForm(req.params.id);
 
     if (!form) {
       return res.status(404).json({
@@ -303,22 +266,9 @@ exports.reorderFields = async (req, res, next) => {
       });
     }
 
-    const { fieldOrders } = req.body; // { fieldId: newOrder }
-
-    form.fields.forEach(field => {
-      if (fieldOrders[field._id]) {
-        field.order = fieldOrders[field._id];
-      }
-    });
-
-    // Sort fields by order
-    form.fields.sort((a, b) => a.order - b.order);
-    await form.save();
-
-    res.status(200).json({
-      success: true,
-      data: form
-    });
+    const { fieldOrders } = req.body;
+    const updated = await store.reorderFields(req.params.id, fieldOrders || {});
+    res.status(200).json({ success: true, data: updated });
   } catch (error) {
     next(error);
   }

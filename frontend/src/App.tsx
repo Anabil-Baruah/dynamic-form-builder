@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import AdminDashboard from "./pages/AdminDashboard";
 import FormView from "./pages/FormView";
+import FormSubmissions from "./pages/FormSubmissions";
 import NotFound from "./pages/NotFound";
 import PublicForms from "./pages/PublicForms";
 
@@ -20,6 +21,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/form/:id" element={<FormView />} />
+            <Route path="/form/:id/submissions" element={<FormSubmissions />} />
             <Route path="/forms" element={<PublicForms />} />
             <Route
               path="/admin"

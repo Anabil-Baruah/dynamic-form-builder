@@ -47,8 +47,16 @@ export const FieldEditor = ({ field, onUpdate }: FieldEditorProps) => {
     );
   }
 
-  const handleChange = (key: keyof FormFieldWithClientId, value: any) => {
+  const handleChange = (key: keyof FormFieldWithClientId, value: unknown) => {
     const updated = { ...localField, [key]: value };
+    setLocalField(updated);
+    onUpdate(updated);
+  };
+
+  const handleValidationChange = (key: string, value: unknown) => {
+    const current = localField?.validation || {};
+    const nextValidation = { ...current, [key]: value };
+    const updated = { ...localField!, validation: nextValidation } as FormFieldWithClientId;
     setLocalField(updated);
     onUpdate(updated);
   };
@@ -165,6 +173,13 @@ export const FieldEditor = ({ field, onUpdate }: FieldEditorProps) => {
                   type="number"
                   placeholder="0"
                   className="h-8"
+                  value={localField.validation?.minLength ?? ""}
+                  onChange={(e) =>
+                    handleValidationChange(
+                      "minLength",
+                      e.target.value === "" ? undefined : Number(e.target.value)
+                    )
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -174,6 +189,13 @@ export const FieldEditor = ({ field, onUpdate }: FieldEditorProps) => {
                   type="number"
                   placeholder="100"
                   className="h-8"
+                  value={localField.validation?.maxLength ?? ""}
+                  onChange={(e) =>
+                    handleValidationChange(
+                      "maxLength",
+                      e.target.value === "" ? undefined : Number(e.target.value)
+                    )
+                  }
                 />
               </div>
             </div>
@@ -191,6 +213,13 @@ export const FieldEditor = ({ field, onUpdate }: FieldEditorProps) => {
                   type="number"
                   placeholder="0"
                   className="h-8"
+                  value={localField.validation?.min ?? ""}
+                  onChange={(e) =>
+                    handleValidationChange(
+                      "min",
+                      e.target.value === "" ? undefined : Number(e.target.value)
+                    )
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -200,6 +229,31 @@ export const FieldEditor = ({ field, onUpdate }: FieldEditorProps) => {
                   type="number"
                   placeholder="100"
                   className="h-8"
+                  value={localField.validation?.max ?? ""}
+                  onChange={(e) =>
+                    handleValidationChange(
+                      "max",
+                      e.target.value === "" ? undefined : Number(e.target.value)
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {localField.type === "date" && (
+          <Card className="p-4 bg-muted">
+            <Label className="text-sm font-medium mb-3 block">Validation</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="min-date" className="text-xs">Minimum Date</Label>
+                <Input
+                  id="min-date"
+                  type="date"
+                  className="h-8"
+                  value={localField.validation?.minDate ?? ""}
+                  onChange={(e) => handleValidationChange("minDate", e.target.value || undefined)}
                 />
               </div>
             </div>

@@ -8,27 +8,30 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Loader2, ArrowLeft, Eye, Trash2, Download } from "lucide-react";
-import { listSubmissions, deleteSubmission, exportSubmissionsCsv, SubmissionItem } from "@/services/submissions";
+import { Loader2, ArrowLeft, Eye, Trash2, Download, Pencil } from "lucide-react";
+import { listSubmissions, deleteSubmission, exportSubmissionsCsv, updateSubmissionStatus, type SubmissionItem, getSubmissionDetail, updateSubmissionAnswers } from "@/services/submissions";
+import type { FormField } from "@/types/form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-const SubmissionsTable = () => {
+const FormSubmissions = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSP] = useSearchParams();
   const [pageSize, setPageSize] = useState<number>(Number(searchParams.get("limit")) || 10);
   const [pageIndex, setPageIndex] = useState<number>(Number(searchParams.get("page")) || 1);
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: (searchParams.get("order") || "desc") === "desc" }]);
   const [search, setSearch] = useState<string>("");
 
   useEffect(() => {
-    setSearchParams({ page: String(pageIndex), limit: String(pageSize), sortBy: "createdAt", order: sorting[0]?.desc ? "desc" : "asc" });
-  }, [pageIndex, pageSize, sorting, setSearchParams]);
+    setSP({ page: String(pageIndex), limit: String(pageSize), sortBy: "createdAt", order: sorting[0]?.desc ? "desc" : "asc" });
+  }, [pageIndex, pageSize, sorting, setSP]);
 
   const query = useQuery({
-    queryKey: ["submissions", id, pageIndex, pageSize, sorting[0]?.desc ? "desc" : "asc"],
-    queryFn: () => listSubmissions(id!, { page: pageIndex, limit: pageSize, sortBy: "createdAt", order: sorting[0]?.desc ? "desc" : "asc" }, true),
+    queryKey: ["form-submissions", id, pageIndex, pageSize, sorting[0]?.desc ? "desc" : "asc"],
+    queryFn: () => listSubmissions(id!, { page: pageIndex, limit: pageSize, sortBy: "createdAt", order: sorting[0]?.desc ? "desc" : "asc" }),
     enabled: !!id,
     keepPreviousData: true,
   });
@@ -36,12 +39,14 @@ const SubmissionsTable = () => {
   const delMutation = useMutation({
     mutationFn: ({ submissionId }: { submissionId: string }) => deleteSubmission(id!, submissionId),
     onSuccess: () => {
-      toast.success("Deleted");
-      queryClient.invalidateQueries({ queryKey: ["submissions", id] });
+      queryClient.invalidateQueries({ queryKey: ["form-submissions", id] });
     },
-    onError: (err: unknown) => {
-      const e = err as { message?: string };
-      toast.error(e?.message || "Delete failed");
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ submissionId, status }: { submissionId: string; status: string }) => updateSubmissionStatus(id!, submissionId, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["form-submissions", id] });
     },
   });
 
@@ -57,11 +62,20 @@ const SubmissionsTable = () => {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     },
-    onSuccess: () => toast.success("Export started"),
-    onError: (err: unknown) => {
-      const e = err as { message?: string };
-      toast.error(e?.message || "Export failed");
+  });
+
+  const [editing, setEditing] = useState<{ open: boolean; data?: (SubmissionItem & { formId: { title: string; fields: FormField[] } }) }>({ open: false });
+  const editMutation = useMutation({
+    mutationFn: async (payload: { submissionId: string; answers: Record<string, unknown> }) => updateSubmissionAnswers(id!, payload.submissionId, payload.answers),
+    onSuccess: () => {
+      setEditing({ open: false });
+      queryClient.invalidateQueries({ queryKey: ["form-submissions", id] });
+      toast.success("Submission updated");
     },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : "Failed to save";
+      toast.error(message);
+    }
   });
 
   const columns = useMemo<ColumnDef<SubmissionItem>[]>(() => [
@@ -95,12 +109,31 @@ const SubmissionsTable = () => {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <Button variant="destructive" size="sm" onClick={() => delMutation.mutate({ submissionId: row.original._id })}>
-          <Trash2 className="w-4 h-4 mr-2" />Delete
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={async () => {
+            try {
+              const full = await getSubmissionDetail(id!, row.original._id);
+              setEditing({ open: true, data: full });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "Failed to load submission";
+              toast.error(message);
+            }
+          }}>
+            <Pencil className="w-4 h-4 mr-2" />Edit
+          </Button>
+          <Select value={row.original.status} onValueChange={(v) => statusMutation.mutate({ submissionId: row.original._id, status: v })}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">pending</SelectItem>
+              <SelectItem value="reviewed">reviewed</SelectItem>
+              <SelectItem value="archived">archived</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="destructive" size="sm" onClick={() => delMutation.mutate({ submissionId: row.original._id })}><Trash2 className="w-4 h-4 mr-2" />Delete</Button>
+        </div>
       ),
     },
-  ], [delMutation]);
+  ], [statusMutation, delMutation]);
 
   const filteredData = useMemo(() => {
     const data = query.data?.data || [];
@@ -144,6 +177,7 @@ const SubmissionsTable = () => {
   const pages = query.data?.pagination?.pages || 1;
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-subtle py-8 px-4">
       <div className="container mx-auto">
         <div className="flex items-center justify-between mb-4">
@@ -204,7 +238,73 @@ const SubmissionsTable = () => {
         </Card>
       </div>
     </div>
+    {editing.open && (
+      <Dialog open={editing.open} onOpenChange={(o) => setEditing((e) => ({ ...e, open: o }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Submission</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-auto">
+            {Object.entries(editing.data?.answers || {}).map(([k, v]) => {
+              const fieldDef = editing.data?.formId?.fields?.find((f) => f.name === k);
+              const type = fieldDef?.type;
+              const displayValue = Array.isArray(v) || typeof v === "object" ? JSON.stringify(v) : String(v ?? "");
+              const isComplex = Array.isArray(v) || typeof v === "object";
+              const handleChange = (raw: string) => {
+                let next: unknown = raw;
+                if (type === "number") {
+                  next = raw === "" ? "" : Number(raw);
+                } else if (isComplex) {
+                  try {
+                    next = raw ? JSON.parse(raw) : raw;
+                  } catch (_) {
+                    next = raw; // keep as string if JSON invalid; backend will reject and toast will show
+                  }
+                }
+                setEditing((prev) => ({
+                  open: true,
+                  data: {
+                    ...prev.data!,
+                    answers: { ...prev.data!.answers, [k]: next }
+                  }
+                }));
+              };
+              return (
+                <div key={k} className="space-y-1">
+                  <Label className="text-sm">{k}</Label>
+                  {isComplex ? (
+                    <textarea
+                      className="w-full border rounded-md p-2 text-sm"
+                      value={displayValue}
+                      onChange={(e) => handleChange(e.target.value)}
+                      rows={4}
+                    />
+                  ) : (
+                    <Input
+                      type={type === "number" ? "number" : type === "date" ? "date" : "text"}
+                      value={displayValue}
+                      onChange={(e) => handleChange(e.target.value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing({ open: false })}>Cancel</Button>
+            <Button onClick={() => {
+              const answers = editing.data?.answers || {};
+              editMutation.mutate({ submissionId: editing.data?._id, answers });
+            }} disabled={editMutation.isPending}>
+              {editMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 };
 
-export default SubmissionsTable;
+export default FormSubmissions;
