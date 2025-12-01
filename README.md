@@ -85,6 +85,7 @@ cd backend
 npm run dev
 
 # terminal 2 (frontend, project root)
+cd frontend
 npm run dev
 ```
 

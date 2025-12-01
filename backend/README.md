@@ -1,6 +1,6 @@
 # Form Builder Backend API
 
-Node.js + Express + MongoDB backend for dynamic form builder application.
+Node.js + Express backend with filesystem-backed JSON storage for dynamic form builder.
 
 ## Architecture
 
@@ -9,11 +9,10 @@ flowchart TB
   Client[(Admin UI / Public Forms)] -->|HTTP /api/*| API[Express API]
   API --> Forms[Forms Controller]
   API --> Subs[Submissions Controller]
-  API --> Auth[Admin Token Middleware]
   Subs --> Multer[Multer Disk Storage]
   API <--> WS[(Socket.IO)]
-  Forms --> DB[(MongoDB)]
-  Subs --> DB
+  Forms --> JSON[(JSON File Store)]
+  Subs --> JSON
   Subs -->|/uploads/forms/:formId/*| Static[/Static Files/]
 ```
 
@@ -23,7 +22,6 @@ flowchart TB
 - Create, read, update, delete forms
 - Field management with validation rules
 - Support for conditional/nested fields
-- Form versioning for historical submissions
 - Drag-and-drop field reordering
 
 ✅ **Field Types**
@@ -45,13 +43,10 @@ flowchart TB
 - Rate limiting
 - CORS protection
 - Helmet security headers
-- JWT authentication ready
-- MongoDB injection prevention
 
 ## Prerequisites
 
-- Node.js 16+ and npm
-- MongoDB 4.4+
+- Node.js 18+ and npm
 - Git
 
 ## Installation
@@ -74,28 +69,13 @@ cp .env.example .env
 Edit `.env` and configure:
 ```env
 PORT=5000
-MONGODB_URI=mongodb://localhost:27017/formbuilder
-ADMIN_TOKEN=your-secret-admin-token
-JWT_SECRET=your-jwt-secret
-CORS_ORIGIN=http://localhost:8080
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:5173
+MAX_FILE_SIZE=5242880
+UPLOAD_PATH=./uploads
 ```
 
-4. **Start MongoDB:**
-```bash
-# macOS (with Homebrew)
-brew services start mongodb-community
-
-# Linux (systemd)
-sudo systemctl start mongod
-
-# Windows
-net start MongoDB
-
-# Or use Docker
-docker run -d -p 27017:27017 --name mongodb mongo:latest
-```
-
-5. **Start the server:**
+4. **Start the server:**
 
 Development mode (with auto-reload):
 ```bash
@@ -113,10 +93,9 @@ Server will run at `http://localhost:5000`
 
 ### Forms
 
-#### Get All Forms (Admin)
+#### Get All Forms
 ```http
 GET /api/forms
-Authorization: Bearer <ADMIN_TOKEN>
 
 Query params:
 - status: draft|active|archived
@@ -129,10 +108,17 @@ Query params:
 GET /api/forms/:id
 ```
 
-#### Create Form (Admin)
+#### Get Public Forms (active)
+```http
+GET /api/forms/public
+Query params:
+- page: number (default: 1)
+- limit: number (default: 10)
+```
+
+#### Create Form
 ```http
 POST /api/forms
-Authorization: Bearer <ADMIN_TOKEN>
 Content-Type: application/json
 
 {
@@ -161,10 +147,9 @@ Content-Type: application/json
 }
 ```
 
-#### Update Form (Admin)
+#### Update Form
 ```http
 PUT /api/forms/:id
-Authorization: Bearer <ADMIN_TOKEN>
 Content-Type: application/json
 
 {
@@ -173,18 +158,16 @@ Content-Type: application/json
 }
 ```
 
-#### Delete Form (Admin)
+#### Delete Form
 ```http
 DELETE /api/forms/:id
-Authorization: Bearer <ADMIN_TOKEN>
 ```
 
 ### Fields
 
-#### Add Field to Form (Admin)
+#### Add Field to Form
 ```http
 POST /api/forms/:id/fields
-Authorization: Bearer <ADMIN_TOKEN>
 Content-Type: application/json
 
 {
@@ -200,10 +183,9 @@ Content-Type: application/json
 }
 ```
 
-#### Update Field (Admin)
+#### Update Field
 ```http
 PUT /api/forms/:id/fields/:fieldId
-Authorization: Bearer <ADMIN_TOKEN>
 Content-Type: application/json
 
 {
@@ -212,16 +194,14 @@ Content-Type: application/json
 }
 ```
 
-#### Delete Field (Admin)
+#### Delete Field
 ```http
 DELETE /api/forms/:id/fields/:fieldId
-Authorization: Bearer <ADMIN_TOKEN>
 ```
 
-#### Reorder Fields (Admin)
+#### Reorder Fields
 ```http
 PUT /api/forms/:id/reorder
-Authorization: Bearer <ADMIN_TOKEN>
 Content-Type: application/json
 
 {
@@ -235,10 +215,10 @@ Content-Type: application/json
 
 ### Submissions
 
-#### Submit Form (Public)
+#### Submit Form (multipart supported)
 ```http
 POST /api/submissions/:id/submit
-Content-Type: application/json
+Content-Type: multipart/form-data | application/json
 
 {
   "answers": {
@@ -251,10 +231,9 @@ Content-Type: application/json
 }
 ```
 
-#### Get Submissions (Admin)
+#### Get Submissions
 ```http
 GET /api/submissions/:formId
-Authorization: Bearer <ADMIN_TOKEN>
 
 Query params:
 - status: pending|reviewed|archived
@@ -264,39 +243,35 @@ Query params:
 - order: asc|desc
 ```
 
-#### Get Single Submission (Admin)
+#### Get Single Submission
 ```http
 GET /api/submissions/:formId/:submissionId
-Authorization: Bearer <ADMIN_TOKEN>
 ```
 
-#### Update Submission Status (Admin)
+#### Update Submission
 ```http
 PATCH /api/submissions/:formId/:submissionId
-Authorization: Bearer <ADMIN_TOKEN>
 Content-Type: application/json
 
 {
-  "status": "reviewed"
+  "status": "reviewed",
+  "answers": { "field_name": "updated value" }
 }
 ```
 
-#### Delete Submission (Admin)
+#### Delete Submission
 ```http
 DELETE /api/submissions/:formId/:submissionId
-Authorization: Bearer <ADMIN_TOKEN>
 ```
 
-#### Export Submissions to CSV (Admin)
+#### Export Submissions to CSV
 ```http
 GET /api/submissions/:formId/export
-Authorization: Bearer <ADMIN_TOKEN>
 ```
 
-#### Get Submission Statistics (Admin)
+#### Get Submission Statistics
 ```http
 GET /api/submissions/:formId/stats
-Authorization: Bearer <ADMIN_TOKEN>
 ```
 
 ## Field Types & Validation
@@ -355,13 +330,7 @@ Authorization: Bearer <ADMIN_TOKEN>
 
 ## Authentication
 
-The API uses Bearer token authentication for admin endpoints.
-
-**Setting the admin token:**
-1. Set `ADMIN_TOKEN` in `.env` file
-2. Include in requests: `Authorization: Bearer <ADMIN_TOKEN>`
-
-**For production:** Implement JWT-based authentication using the provided `generateToken()` function.
+No authentication is required. All endpoints are public.
 
 ## Testing
 
@@ -416,58 +385,14 @@ API returns consistent error responses:
 
 ## Production Deployment
 
-### Docker Deployment
-
-**Create Dockerfile:**
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 5000
-CMD ["node", "server.js"]
-```
-
-**Create docker-compose.yml:**
-```yaml
-version: '3.8'
-services:
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-  
-  api:
-    build: .
-    ports:
-      - "5000:5000"
-    environment:
-      - MONGODB_URI=mongodb://mongodb:27017/formbuilder
-      - NODE_ENV=production
-    depends_on:
-      - mongodb
-
-volumes:
-  mongo-data:
-```
-
-**Run:**
-```bash
-docker-compose up -d
-```
-
 ### Environment Variables (Production)
 
 ```env
 NODE_ENV=production
 PORT=5000
-MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/formbuilder
-JWT_SECRET=<strong-random-secret>
-ADMIN_TOKEN=<strong-random-token>
 CORS_ORIGIN=https://your-frontend-domain.com
+MAX_FILE_SIZE=5242880
+UPLOAD_PATH=./uploads
 ```
 
 ## Security Checklist
@@ -476,26 +401,22 @@ CORS_ORIGIN=https://your-frontend-domain.com
 - ✅ Rate limiting enabled
 - ✅ CORS configured
 - ✅ Helmet security headers
-- ✅ MongoDB injection prevention
 - ✅ No sensitive data in logs
-- ⚠️ Replace basic token auth with proper JWT/OAuth
 - ⚠️ Enable HTTPS in production
-- ⚠️ Set strong JWT secret
-- ⚠️ Implement role-based access control
 
 ## Troubleshooting
 
-**MongoDB connection error:**
+**Port already in use:**
 ```
-Error: connect ECONNREFUSED 127.0.0.1:27017
+Error: listen EADDRINUSE: address already in use :::5000
 ```
-Solution: Ensure MongoDB is running (`mongod` service)
+Solution: Stop the process using port 5000 or set a different `PORT`.
 
 **Validation errors:**
 Check that field names are lowercase with underscores only: `field_name`
 
 **CORS errors:**
-Update `CORS_ORIGIN` in `.env` to match your frontend URL
+Update `CORS_ORIGIN` in `.env` to match your frontend URL (Vite default is `http://localhost:5173`).
 
 ## License
 
