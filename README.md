@@ -14,7 +14,7 @@ The app is split into a React SPA frontend and an Express API backend. Data (for
 ```mermaid
 flowchart LR
   subgraph Browser [Browser]
-    UI[React SPA]\nVite build
+    UI[React SPA\\nVite build]
   end
 
   subgraph Frontend
